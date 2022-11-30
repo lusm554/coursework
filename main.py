@@ -1,6 +1,9 @@
-import asyncio
-import json
-from aiohttp import ClientSession
+import asyncio # to get able async
+import json # convert objects to json
+from aiohttp import ClientSession # request web pages
+import urllib.parse # join urls
+from bs4 import BeautifulSoup # parse html
+
 
 class Input:
     """
@@ -54,16 +57,41 @@ class TranslatorAPI:
                 trans_json = await response.json()
                 try:
                     return trans_json['translatedText']
-                except KeyError:
+                except KeyError as error:
                     print(f"Error in TranslatorAPI.get_trans with text: {text}")
-                    return text
+                    raise error
 
 class WeatherScrapper:
     """
     Weather API scapper
     """
-    pass
+    def __init__(self):
+        self.service_url = 'https://yandex.ru/pogoda/'
+    
+    async def get_content(self, city):
+        print("WeatherScrapper.get city", city)
+        async with ClientSession() as session:
+            city_weather_url = urllib.parse.urljoin(self.service_url, city)
+            print("WeatherScrapper.get url", city_weather_url)
+            async with session.get(city_weather_url) as response:
+                try:
+                    html = await response.text()
+                    return BeautifulSoup(html, "html.parser")
+                except Exception as error:
+                    print(f"Error in WeatherScrapper.get: {error}")
+                    raise error
+    
+    async def parse(self, soup):
+        forecast = soup.find("div", class_="forecast-briefly__days")
+        forecast_10days = forecast.find_all("li", class_="forecast-briefly__day")
+        for each_day in forecast_10days:
+            print(each_day)
 
+    async def get(self, city):
+        #soup = await self.get_content(city)
+        soup = BeautifulSoup(open("doc.html"), "html.parser")
+        weather = await self.parse(soup)
+        return weather
 
 class DAOManager:
     """
@@ -73,21 +101,26 @@ class DAOManager:
 
 
 async def main():
-    _input = Input()
-    _translator = TranslatorAPI()
-    """
-    _weather = WeatherScrapper()
-    _db = DAOManager()
-    """
+    try:
+        _input = Input()
+        _translator = TranslatorAPI()
+        _weather = WeatherScrapper()
+        """
+        _db = DAOManager()
+        """
 
-    city_en = _input.get_city()
-    city_ru = await _translator.get_trans(city_en)
-    """
-    city_weather = _weather.get(city_en)
-    _db.save(city_weather)
-    """
-    print(city_en)
-    print(city_ru)
+        #city_ru = _input.get_city()
+        #city_en = await _translator.get_trans(city_ru)
+        city_en = "kaliningrad"
+        city_weather = await _weather.get(city_en)
+        """
+        _db.save(city_weather)
+        """
+        #print(city_weather)
+    except Exception as error:
+        print(f"Error {error}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
+
