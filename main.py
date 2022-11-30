@@ -3,6 +3,7 @@ import json # convert objects to json
 from aiohttp import ClientSession # request web pages
 import urllib.parse # join urls
 from bs4 import BeautifulSoup # parse html
+import sqlite3 # db api 
 
 
 class Input:
@@ -94,8 +95,8 @@ class WeatherScrapper:
 
 
     async def get(self, city):
-        soup = await self.get_content(city)
-        #soup = BeautifulSoup(open("doc.html"), "html.parser") # mock data
+        #soup = await self.get_content(city)
+        soup = BeautifulSoup(open("doc.html"), "html.parser") # mock data
         weather = await self.parse(soup)
         return weather
 
@@ -103,7 +104,38 @@ class DAOManager:
     """
     Data Access Object Manager for DBMS
     """
-    pass
+    def __init__(self, db="test.db"):
+        self.conn = sqlite3.connect(db)
+        self.__setup_db__()
+    
+    def __setup_db__(self):
+        """
+        Set up default DB tables.
+        clt_id      - ИД загрузки
+        clt_date    - дата загрузки
+        clt_action  - действие, U - update, A - append
+        """
+        cur = self.conn.cursor()
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS weather (
+            forecast_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            weekday TEXT,
+            month TEXT,
+            weather TEXT,
+            temperature_day TEXT,
+            temperature_night TEXT
+            ctl_id INTEGER,
+            ctl_date TEXT,
+            ctl_action TEXT
+        )
+        """
+        cur.execute(create_table_query)
+
+    def set(self, data):
+        pass
+
+    def get(self, data):
+        pass
 
 
 async def main():
@@ -111,17 +143,15 @@ async def main():
         _input = Input()
         _translator = TranslatorAPI()
         _weather = WeatherScrapper()
-        """
         _db = DAOManager()
-        """
 
+        """
         city_ru = _input.get_city()
         city_en = await _translator.get_trans(city_ru)
-        #city_en = "kaliningrad" # mock data
+        """
+        city_en = "kaliningrad" # mock data
         city_weather = await _weather.get(city_en)
-        """
-        _db.save(city_weather)
-        """
+        _db.set(city_weather)
         print(city_weather)
     except Exception as error:
         print(f"Error {error}")
