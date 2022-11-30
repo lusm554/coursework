@@ -82,14 +82,20 @@ class WeatherScrapper:
                     raise error
     
     async def parse(self, soup):
+        clean_forecast = []
         forecast = soup.find("div", class_="forecast-briefly__days")
-        forecast_10days = forecast.find_all("li", class_="forecast-briefly__day")
-        for each_day in forecast_10days:
-            print(each_day)
+        forecast_month = forecast.find_all("li", class_="forecast-briefly__day")
+        for each_day in forecast_month:
+            sdweather = each_day.find("a")["aria-label"]
+            keys = ["weekday", "month", "weather", "temperature_day", "temperature_night"]
+            objdweather = dict(zip(keys, sdweather.split(", ")))
+            clean_forecast.append(objdweather)
+        return clean_forecast
+
 
     async def get(self, city):
-        #soup = await self.get_content(city)
-        soup = BeautifulSoup(open("doc.html"), "html.parser")
+        soup = await self.get_content(city)
+        #soup = BeautifulSoup(open("doc.html"), "html.parser") # mock data
         weather = await self.parse(soup)
         return weather
 
@@ -109,16 +115,17 @@ async def main():
         _db = DAOManager()
         """
 
-        #city_ru = _input.get_city()
-        #city_en = await _translator.get_trans(city_ru)
-        city_en = "kaliningrad"
+        city_ru = _input.get_city()
+        city_en = await _translator.get_trans(city_ru)
+        #city_en = "kaliningrad" # mock data
         city_weather = await _weather.get(city_en)
         """
         _db.save(city_weather)
         """
-        #print(city_weather)
+        print(city_weather)
     except Exception as error:
         print(f"Error {error}")
+        raise error
 
 
 if __name__ == "__main__":
