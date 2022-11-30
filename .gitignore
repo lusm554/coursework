@@ -3,3 +3,7 @@
 
 #web
 *.html
+
+#SQLite3
+*.db
+!prom-weather.db
