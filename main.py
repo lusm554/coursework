@@ -82,7 +82,7 @@ class WeatherScrapper:
                     print(f"Error in WeatherScrapper.get: {error}")
                     raise error
     
-    async def parse(self, soup):
+    async def __parse__(self, soup):
         clean_forecast = []
         forecast = soup.find("div", class_="forecast-briefly__days")
         forecast_month = forecast.find_all("li", class_="forecast-briefly__day")
@@ -93,12 +93,16 @@ class WeatherScrapper:
             clean_forecast.append(objdweather)
         return clean_forecast
 
+    def __db_format__(self, weather):
+        return weather
+        pass
 
     async def get(self, city):
         #soup = await self.get_content(city)
         soup = BeautifulSoup(open("doc.html"), "html.parser") # mock data
-        weather = await self.parse(soup)
-        return weather
+        weather = await self.__parse__(soup)
+        formatted_weather = self.__db_format__(weather)
+        return formatted_weather
 
 class DAOManager:
     """
@@ -123,7 +127,7 @@ class DAOManager:
             month TEXT,
             weather TEXT,
             temperature_day TEXT,
-            temperature_night TEXT
+            temperature_night TEXT,
             ctl_id INTEGER,
             ctl_date TEXT,
             ctl_action TEXT
@@ -132,10 +136,31 @@ class DAOManager:
         cur.execute(create_table_query)
 
     def set(self, data):
-        pass
+        print(data)
+        cur = self.conn.cursor()
+        insert = """ 
+        INSERT INTO weather(
+            weekday,
+            month,
+            weather,
+            temperature_day,
+            temperature_night,
+            ctl_id,
+            ctl_date,
+            ctl_action
+        ) 
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        cur.executemany(insert, data)
 
     def get(self, data):
-        pass
+        cur = self.conn.cursor()
+        select = """
+        SELECT *
+        FROM weather
+        """
+        data_iter = cur.execute(select)
+        return data_iter
 
 
 async def main():
@@ -143,7 +168,7 @@ async def main():
         _input = Input()
         _translator = TranslatorAPI()
         _weather = WeatherScrapper()
-        _db = DAOManager()
+        _db = DAOManager(db=":memory:")
 
         """
         city_ru = _input.get_city()
@@ -151,8 +176,13 @@ async def main():
         """
         city_en = "kaliningrad" # mock data
         city_weather = await _weather.get(city_en)
+        city_weather = [ # mock data
+            ("monday", "dec", "weather", "day", "night", 1, "01.12.2022", "A"),
+            ("monday", "dec", "weather", "day", "night", 1, "01.12.2022", "A"),
+        ]
+
         _db.set(city_weather)
-        print(city_weather)
+        #print(city_weather)
     except Exception as error:
         print(f"Error {error}")
         raise error
