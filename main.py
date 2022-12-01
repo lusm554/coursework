@@ -4,6 +4,7 @@ from aiohttp import ClientSession # request web pages
 import urllib.parse # join urls
 from bs4 import BeautifulSoup # parse html
 import sqlite3 # db api 
+import time # set ctl timestamps
 
 
 class Input:
@@ -91,14 +92,20 @@ class WeatherScrapper:
         return clean_forecast
 
     def __db_format__(self, weather: [{}]) -> [()]:
-        return weather
-        pass
+        """
+        Set hard order of fields for writing to bd. 
+        """
+        formatted_weather = []
+        ordered_schema = ("weekday", "month", "weather", "temperature_day", "temperature_night")
+        for each_obj in weather:
+            t = [each_obj[key] for key in ordered_schema]
+            formatted_weather.append(t)
+        return formatted_weather
 
     async def get(self, city: str) -> [()]:
         #soup = await self.get_content(city)
         soup = BeautifulSoup(open("doc.html"), "html.parser") # mock data
         weather = await self.__parse__(soup)
-        print(weather[0])
         formatted_weather = self.__db_format__(weather)
         return formatted_weather
 
@@ -115,7 +122,7 @@ class DAOManager:
         Set up default DB tables.
         clt_id      - ИД загрузки
         clt_date    - дата загрузки
-        clt_action  - действие, U - update, A - append
+        clt_action  - действие, U - update, I - insert
         """
         cur = self.conn.cursor()
         create_table_query = """
@@ -132,9 +139,31 @@ class DAOManager:
         )
         """
         cur.execute(create_table_query)
+    
+    def __get_last_ctl_load__(self, cur: sqlite3.Cursor) -> int:
+        select_max_ctl_id = """
+        SELECT 
+            CASE
+                WHEN MAX(ctl_id) IS NULL THEN 0 -- in case when rows does not exist
+                ELSE MAX(ctl_id)
+            END AS max_ctl_id
+        FROM weather
+        """
+        res = cur.execute(select_max_ctl_id).fetchone()[0]
+        return res
 
-    def set(self, data: [(str, str, str, str, str, int, str, str)]) -> None: 
+    def set(self, data: [(str, str, str, str, str)]) -> None: 
         cur = self.conn.cursor()
+        #print("DAOManager.set", data)
+        CTL_ID = self.__get_last_ctl_load__(cur)+1 # load id
+        CTL_DATE = str(time.time()) # get current timestamp, like 1594819641.9622827
+        CTL_ACTION = "I" # by now only I(insert)
+
+        data_wctl = []
+        # add ctl fields
+        for each_obj in data:
+            data_wctl.append((*each_obj, CTL_ID, CTL_DATE, CTL_ACTION))
+
         insert = """ 
         INSERT INTO weather(
             weekday,
@@ -148,9 +177,10 @@ class DAOManager:
         ) 
         VALUES(?, ?, ?, ?, ?, ?, ?, ?)
         """
-        cur.executemany(insert, data)
+        cur.executemany(insert, data_wctl)
+        self.conn.commit()
 
-    def get(self, data):
+    def get(self, data=None):
         cur = self.conn.cursor()
         select = """
         SELECT *
@@ -165,21 +195,15 @@ async def main():
         _input = Input()
         _translator = TranslatorAPI()
         _weather = WeatherScrapper()
-        _db = DAOManager(db=":memory:") # remove memory real database
+        _db = DAOManager()
 
-        """
         city_ru = _input.get_city()
         city_en = await _translator.get_trans(city_ru)
-        """
-        city_en = "kaliningrad" # mock data
+        # city_en = "kaliningrad" # mock data
         city_weather = await _weather.get(city_en)
-        city_weather = [ # mock data
-            ("monday", "dec", "weather", "day", "night", 1, "01.12.2022", "A"),
-            ("monday", "dec", "weather", "day", "night", 1, "01.12.2022", "A"),
-        ]
-
         _db.set(city_weather)
-        #print(city_weather)
+        for i in _db.get():
+            print(i)
     except Exception as error:
         print(f"Error {error}")
         raise error
