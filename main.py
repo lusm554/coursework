@@ -224,7 +224,7 @@ class WeatherServiceAPI():
         if weather_exist and weather_not_outofdate:
             return True
         return False
-    
+
     async def get(self):
         try:
             # check if weather already exist
@@ -245,9 +245,58 @@ class WeatherServiceAPI():
             print(f"Error {error}")
             raise error
 
+    async def run(self):
+        try:
+            def month_weather(city):
+                pass 
+
+            def avg_weather():
+                pass
+
+            def print_menu():
+                print("Select number: ")
+                for n, key in enumerate(commands.keys()):
+                    print(f"{n+1}. {key[1].capitalize()}")
+                print()
+
+            commands = {
+                (1, "exit"): lambda: exit(0),
+                (2, "month_weather"): month_weather,
+                (3, "avg_weather"): avg_weather
+            }
+
+            while 1:
+                print_menu()
+                cmd = input("Which one? ")
+                city = None
+                method = None # TODO: final methods
+                try: 
+                    cmd = int(cmd)
+                except ValueError:
+                    print("Not a number.")
+                    print()
+                    continue
+                
+                for fname, f in commands.items():
+                    if cmd in fname:
+                        if cmd == 1:
+                            f()
+                        else:
+                            method = f
+                        break
+                else:
+                    print("Command not found", "\n")
+                    continue
+
+                city = input("Input city(ru, en): ").lower()
+                method(city)
+        except Exception as error:
+            print(error)
+
+
 async def main():
     weather_service = WeatherServiceAPI(db="test.db")
-    await weather_service.get()
+    await weather_service.run()
 
 if __name__ == "__main__":
     asyncio.run(main())
