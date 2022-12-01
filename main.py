@@ -10,10 +10,7 @@ class Input:
     """
     Getting input from user
     """
-
-    STDIN = "stdin"
-
-    def __init__(self, inmethod="stdin"):
+    def __init__(self, inmethod: str="stdin") -> None:
         """
         Defining method of fetching data.
         This is convenient because we can fast change method of fetching data.
@@ -24,7 +21,7 @@ class Input:
 
         self.inmethod = inmethod
 
-    def get_city(self):
+    def get_city(self) -> str:
         result = None
         if self.inmethod == self.STDIN:
             result = self.__get_stdin__()
@@ -32,11 +29,11 @@ class Input:
             result = self.__get_http__()
         return result
 
-    def __get_stdin__(self):
+    def __get_stdin__(self) -> str:
         result = input("City? ")
         return result
 
-    def __get_http__(self):
+    def __get_http__(self) -> None:
         """
         For exmaple, listen HTTP GET requests.
         Fetch city from parametrs(?city=Казань) or path (http://weather.com/калининград).
@@ -48,10 +45,10 @@ class TranslatorAPI:
     """
     Translator API from ru to en
     """
-    def __init__(self):
+    def __init__(self) -> None:
         self.url = 'https://libretranslate.de/translate'
 
-    async def get_trans(self, text, source="ru", target="en"):
+    async def get_trans(self, text: str, source: str="ru", target: str="en") -> str:
         async with ClientSession() as session:
             data = {'q': text, 'source': source, 'target': target, 'format': 'text'}
             async with session.post(self.url, json=data) as response:
@@ -66,10 +63,10 @@ class WeatherScrapper:
     """
     Weather API scapper
     """
-    def __init__(self):
+    def __init__(self) -> None:
         self.service_url = 'https://yandex.ru/pogoda/'
     
-    async def get_content(self, city):
+    async def get_content(self, city: str) -> str:
         print("WeatherScrapper.get city", city)
         async with ClientSession() as session:
             city_weather_url = urllib.parse.urljoin(self.service_url, city)
@@ -82,7 +79,7 @@ class WeatherScrapper:
                     print(f"Error in WeatherScrapper.get: {error}")
                     raise error
     
-    async def __parse__(self, soup):
+    async def __parse__(self, soup: BeautifulSoup) -> [{}]:
         clean_forecast = []
         forecast = soup.find("div", class_="forecast-briefly__days")
         forecast_month = forecast.find_all("li", class_="forecast-briefly__day")
@@ -93,14 +90,15 @@ class WeatherScrapper:
             clean_forecast.append(objdweather)
         return clean_forecast
 
-    def __db_format__(self, weather):
+    def __db_format__(self, weather: [{}]) -> [()]:
         return weather
         pass
 
-    async def get(self, city):
+    async def get(self, city: str) -> [()]:
         #soup = await self.get_content(city)
         soup = BeautifulSoup(open("doc.html"), "html.parser") # mock data
         weather = await self.__parse__(soup)
+        print(weather[0])
         formatted_weather = self.__db_format__(weather)
         return formatted_weather
 
@@ -108,11 +106,11 @@ class DAOManager:
     """
     Data Access Object Manager for DBMS
     """
-    def __init__(self, db="test.db"):
+    def __init__(self, db: str="test.db") -> None:
         self.conn = sqlite3.connect(db)
         self.__setup_db__()
     
-    def __setup_db__(self):
+    def __setup_db__(self) -> None:
         """
         Set up default DB tables.
         clt_id      - ИД загрузки
@@ -135,8 +133,7 @@ class DAOManager:
         """
         cur.execute(create_table_query)
 
-    def set(self, data):
-        print(data)
+    def set(self, data: [(str, str, str, str, str, int, str, str)]) -> None: 
         cur = self.conn.cursor()
         insert = """ 
         INSERT INTO weather(
@@ -168,7 +165,7 @@ async def main():
         _input = Input()
         _translator = TranslatorAPI()
         _weather = WeatherScrapper()
-        _db = DAOManager(db=":memory:")
+        _db = DAOManager(db=":memory:") # remove memory real database
 
         """
         city_ru = _input.get_city()
