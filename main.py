@@ -60,7 +60,7 @@ class TranslatorAPI:
                     print(f"Error in TranslatorAPI.get_trans with text: {text}")
                     raise error
 
-class WeatherScrapper:
+class WeatherScraper:
     """
     Weather API scapper
     """
@@ -68,6 +68,7 @@ class WeatherScrapper:
         self.service_url = 'https://yandex.ru/pogoda/'
     
     async def get_content(self, city: str) -> str:
+        city = city.strip().replace(" ", "-")
         print("WeatherScrapper.get city", city)
         async with ClientSession() as session:
             city_weather_url = urllib.parse.urljoin(self.service_url, city)
@@ -113,8 +114,8 @@ class WeatherScrapper:
         return formatted_weather
 
     async def get(self, city: str) -> [()]:
-        #soup = await self.get_content(city)
-        soup = BeautifulSoup(open("doc.html"), "html.parser") # mock data
+        soup = await self.get_content(city)
+        # soup = BeautifulSoup(open("doc.html"), "html.parser") # mock data
         weather = await self.__parse__(soup)
         formatted_weather = self.__db_format__(weather, city)
         return formatted_weather
@@ -200,7 +201,7 @@ class DAOManager:
         data_iter = cur.execute(select)
         return data_iter
 
-class ServiceAPI():
+class WeatherServiceAPI():
     """
     Contain methods of this service.
     Methods:
@@ -208,32 +209,30 @@ class ServiceAPI():
         - Get All Weather. Just show user weather we have.
         - Get average temp in month by city.
     """
+    def __init__(self, db: str="test.db"):
+        self._input = Input()
+        self._translator = TranslatorAPI()
+        self._weather_scraper = WeatherScraper()
+        self._db = DAOManager(db=db)
     
-    def get(self, city: str):
-        # check if weather already exist
-        # scap weather if not exist
-        # return weather
-        pass
+    async def get(self):
+        try:
+            # check if weather already exist
+            # scap weather if not exist
+            # return weather
+            city_ru = self._input.get_city() # REWRITE, add this to common interface
+            city_en = await self._translator.get_trans(city_ru)
+            city_weather = await self._weather_scraper.get(city_en)
+            self._db.set(city_weather)
+            for i in self._db.get():
+                print(i)
+        except Exception as error:
+            print(f"Error {error}")
+            raise error
 
 async def main():
-    try:
-        _input = Input()
-        _translator = TranslatorAPI()
-        _weather = WeatherScrapper()
-        _db = DAOManager(db=":memory:")
-
-        # city_ru = _input.get_city()
-        # city_en = await _translator.get_trans(city_ru)
-        city_en = "kaliningrad" # mock data
-        city_weather = await _weather.get(city_en)
-        # print(city_weather)
-        _db.set(city_weather)
-        for i in _db.get():
-            print(i)
-    except Exception as error:
-        print(f"Error {error}")
-        raise error
-
+    weather_service = WeatherServiceAPI(db=":memory:")
+    await weather_service.get()
 
 if __name__ == "__main__":
     asyncio.run(main())
