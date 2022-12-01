@@ -154,7 +154,6 @@ class DAOManager:
 
     def set(self, data: [(str, str, str, str, str)]) -> None: 
         cur = self.conn.cursor()
-        #print("DAOManager.set", data)
         CTL_ID = self.__get_last_ctl_load__(cur)+1 # load id
         CTL_DATE = str(time.time()) # get current timestamp, like 1594819641.9622827
         CTL_ACTION = "I" # by now only I(insert)
@@ -189,6 +188,15 @@ class DAOManager:
         data_iter = cur.execute(select)
         return data_iter
 
+class ServiceAPI():
+    """
+    Contain methods of this service.
+    Methods:
+        - Get Day Weather. If weather not in database or out of date, then request some and save it.
+        - Get All Weather. Just show user weather we have.
+        - Get average temp in month by city.
+    """
+    pass
 
 async def main():
     try:
