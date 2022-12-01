@@ -4,7 +4,7 @@ from aiohttp import ClientSession # request web pages
 import urllib.parse # join urls
 from bs4 import BeautifulSoup # parse html
 import sqlite3 # db api 
-import time # set ctl timestamps
+from datetime import datetime # set ctl timestamps
 
 
 class Input:
@@ -88,17 +88,27 @@ class WeatherScrapper:
             sdweather = each_day.find("a")["aria-label"]
             keys = ["weekday", "month", "weather", "temperature_day", "temperature_night"]
             objdweather = dict(zip(keys, sdweather.split(", ")))
+            objdweather["raw_weather"] = sdweather
             clean_forecast.append(objdweather)
         return clean_forecast
 
-    def __db_format__(self, weather: [{}]) -> [()]:
+    def __db_format__(self, weather: [{}], city: str) -> [()]:
         """
         Set hard order of fields for writing to bd. 
         """
+        # я а 
+        nmonth = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
         formatted_weather = []
-        ordered_schema = ("weekday", "month", "weather", "temperature_day", "temperature_night")
+        ordered_schema = ("city", "report_date", "weather", "temperature_day", "temperature_night", "raw_weather")
         for each_obj in weather:
-            t = [each_obj[key] for key in ordered_schema]
+            day, month = each_obj["month"].split(" ")
+            report_date = datetime.strptime(f"{day}-{nmonth.index(month)+1}-{datetime.now().year}", "%d-%m-%Y") # TODO: fix problems with current year
+            dobj = {
+                "city": city,
+                "report_date": str(report_date),
+            }
+            dobj = {**each_obj, **dobj}
+            t = tuple([dobj[key] for key in ordered_schema])
             formatted_weather.append(t)
         return formatted_weather
 
@@ -106,7 +116,7 @@ class WeatherScrapper:
         #soup = await self.get_content(city)
         soup = BeautifulSoup(open("doc.html"), "html.parser") # mock data
         weather = await self.__parse__(soup)
-        formatted_weather = self.__db_format__(weather)
+        formatted_weather = self.__db_format__(weather, city)
         return formatted_weather
 
 class DAOManager:
@@ -128,11 +138,12 @@ class DAOManager:
         create_table_query = """
         CREATE TABLE IF NOT EXISTS weather (
             forecast_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            weekday TEXT,
-            month TEXT,
+            city TEXT,
+            report_date TEXT,
             weather TEXT,
             temperature_day TEXT,
             temperature_night TEXT,
+            raw_weather TEXT,
             ctl_id INTEGER,
             ctl_date TEXT,
             ctl_action TEXT
@@ -155,7 +166,7 @@ class DAOManager:
     def set(self, data: [(str, str, str, str, str)]) -> None: 
         cur = self.conn.cursor()
         CTL_ID = self.__get_last_ctl_load__(cur)+1 # load id
-        CTL_DATE = str(time.time()) # get current timestamp, like 1594819641.9622827
+        CTL_DATE = str(datetime.timestamp(datetime.now())) # get current timestamp, like 1594819641.9622827
         CTL_ACTION = "I" # by now only I(insert)
 
         data_wctl = []
@@ -165,16 +176,17 @@ class DAOManager:
 
         insert = """ 
         INSERT INTO weather(
-            weekday,
-            month,
+            city,
+            report_date,
             weather,
             temperature_day,
             temperature_night,
+            raw_weather,
             ctl_id,
             ctl_date,
             ctl_action
         ) 
-        VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         cur.executemany(insert, data_wctl)
         self.conn.commit()
@@ -196,19 +208,25 @@ class ServiceAPI():
         - Get All Weather. Just show user weather we have.
         - Get average temp in month by city.
     """
-    pass
+    
+    def get(self, city: str):
+        # check if weather already exist
+        # scap weather if not exist
+        # return weather
+        pass
 
 async def main():
     try:
         _input = Input()
         _translator = TranslatorAPI()
         _weather = WeatherScrapper()
-        _db = DAOManager()
+        _db = DAOManager(db=":memory:")
 
-        city_ru = _input.get_city()
-        city_en = await _translator.get_trans(city_ru)
-        # city_en = "kaliningrad" # mock data
+        # city_ru = _input.get_city()
+        # city_en = await _translator.get_trans(city_ru)
+        city_en = "kaliningrad" # mock data
         city_weather = await _weather.get(city_en)
+        # print(city_weather)
         _db.set(city_weather)
         for i in _db.get():
             print(i)
