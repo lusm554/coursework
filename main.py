@@ -5,6 +5,7 @@ import urllib.parse # join urls
 from bs4 import BeautifulSoup # parse html
 import sqlite3 # db api 
 from datetime import datetime # set ctl timestamps
+from prettytable import PrettyTable # print tables
 
 
 class Input:
@@ -31,7 +32,7 @@ class Input:
         return result
 
     def __get_stdin__(self) -> str:
-        result = input("City? ")
+        result = input("City? ").lower()
         return result
 
     def __get_http__(self) -> None:
@@ -82,16 +83,19 @@ class WeatherScraper:
                     raise error
     
     async def __parse__(self, soup: BeautifulSoup) -> [{}]:
-        clean_forecast = []
-        forecast = soup.find("div", class_="forecast-briefly__days")
-        forecast_month = forecast.find_all("li", class_="forecast-briefly__day")
-        for each_day in forecast_month:
-            sdweather = each_day.find("a")["aria-label"]
-            keys = ["weekday", "month", "weather", "temperature_day", "temperature_night"]
-            objdweather = dict(zip(keys, sdweather.split(", ")))
-            objdweather["raw_weather"] = sdweather
-            clean_forecast.append(objdweather)
-        return clean_forecast
+        try:
+            clean_forecast = []
+            forecast = soup.find("div", class_="forecast-briefly__days")
+            forecast_month = forecast.find_all("li", class_="forecast-briefly__day")
+            for each_day in forecast_month:
+                sdweather = each_day.find("a")["aria-label"]
+                keys = ["weekday", "month", "weather", "temperature_day", "temperature_night"]
+                objdweather = dict(zip(keys, sdweather.split(", ")))
+                objdweather["raw_weather"] = sdweather
+                clean_forecast.append(objdweather)
+            return clean_forecast
+        except Exception as error:
+            raise ValueError("Error at WeatherScraper.__parse__: Network error. Yandex thinks it's robot.")
 
     def __db_format__(self, weather: [{}], city: str) -> [()]:
         """
@@ -114,11 +118,15 @@ class WeatherScraper:
         return formatted_weather
 
     async def get(self, city: str) -> [()]:
-        soup = await self.get_content(city)
-        # soup = BeautifulSoup(open("doc.html"), "html.parser") # mock data
-        weather = await self.__parse__(soup)
-        formatted_weather = self.__db_format__(weather, city)
-        return formatted_weather
+        try:
+            soup = await self.get_content(city)
+            # soup = BeautifulSoup(open("doc.html"), "html.parser") # mock data
+            weather = await self.__parse__(soup)
+            formatted_weather = self.__db_format__(weather, city)
+            return formatted_weather
+        except Exception as error:
+            raise error
+
 
 class DAOManager:
     """
@@ -197,6 +205,7 @@ class DAOManager:
         data = cur.execute(sql, args).fetchall()
         return data 
 
+
 class WeatherServiceAPI():
     """
     Contain methods of this service.
@@ -225,35 +234,64 @@ class WeatherServiceAPI():
             return True
         return False
 
-    async def get(self):
-        try:
-            # check if weather already exist
-            # scap weather if not exist
-            # return weather
-            city_ru = self._input.get_city() # REWRITE, add this to common interface
-            city_en = await self._translator.get_trans(city_ru)
-            # city_en = "moscow"
-
+    def scrape_ifnexist_decorator(func2decorate):
+        async def wrap(*args):
+            # scrap here
+            city_ru = args[1]
+            self = args[0]
+            #city_en = await self._translator.get_trans(city_ru)
+            city_en = city_ru
             if not await self.__is_weather_exist__(city_en):
                 print("weather not exist")
                 city_weather = await self._weather_scraper.get(city_en)
                 self._db.set(city_weather)
+            else:
+                print("weather exist")
+            await func2decorate(*args)
+        return wrap
+
+    # async def get(self):
+    #     try:
+    #         # check if weather already exist
+    #         # scap weather if not exist
+    #         # return weather
+    #         city_ru = self._input.get_city() # REWRITE, add this to common interface
+    #         city_en = await self._translator.get_trans(city_ru)
+    #         # city_en = "moscow"
+
+    #         if not await self.__is_weather_exist__(city_en):
+    #             print("weather not exist")
+    #             city_weather = await self._weather_scraper.get(city_en)
+    #             self._db.set(city_weather)
             
-            weather = self._db.get("select * from weather")
-            print(weather)
-        except Exception as error:
-            print(f"Error {error}")
-            raise error
+    #         weather = self._db.get("select * from weather")
+    #         print(weather)
+    #     except Exception as error:
+    #         print(f"Error {error}")
+    #         raise error
+
+    @scrape_ifnexist_decorator
+    async def get_month_weather(self, city: str):
+        month_w = """
+        SELECT *
+        FROM weather
+        WHERE city = ?
+        """
+        data = self._db.get(month_w, (city,))
+        print(data)
+
+    @scrape_ifnexist_decorator
+    async def get_avg_weather(self, city: str):
+        avg_w = """
+        SELECT
+            AVG(weather_id) as day
+        FROM weather
+        WHERE city = ?
+        """
 
     async def run(self):
         try:
-            def month_weather(city):
-                pass 
-
-            def avg_weather():
-                pass
-
-            def print_menu():
+            def print_menu() -> None:
                 print("Select number: ")
                 for n, key in enumerate(commands.keys()):
                     print(f"{n+1}. {key[1].capitalize()}")
@@ -261,35 +299,39 @@ class WeatherServiceAPI():
 
             commands = {
                 (1, "exit"): lambda: exit(0),
-                (2, "month_weather"): month_weather,
-                (3, "avg_weather"): avg_weather
+                (2, "month_weather"): self.get_month_weather,
+                (3, "avg_weather"): self.get_avg_weather,
+                # available cities
             }
 
             while 1:
-                print_menu()
-                cmd = input("Which one? ")
-                city = None
-                method = None # TODO: final methods
-                try: 
+                try:
+                    print_menu()
+                    cmd = input("Which one? ")
+                    city = None
+                    method = None # TODO: final methods
                     cmd = int(cmd)
-                except ValueError:
-                    print("Not a number.")
-                    print()
-                    continue
-                
-                for fname, f in commands.items():
-                    if cmd in fname:
-                        if cmd == 1:
-                            f()
-                        else:
-                            method = f
-                        break
-                else:
-                    print("Command not found", "\n")
-                    continue
+                    
+                    for fname, f in commands.items():
+                        if cmd in fname:
+                            if cmd == 1:
+                                f()
+                            else:
+                                method = f
+                            break
+                    else:
+                        print("Command not found", "\n")
+                        continue
 
-                city = input("Input city(ru, en): ").lower()
-                method(city)
+                    city = self._input.get_city() 
+                    await method(city)
+                    print()
+                except Exception as error:
+                    if "invalid literal for int()" in str(error):
+                        print("Not a number.")
+                    else:
+                        print(error)
+                    print()
         except Exception as error:
             print(error)
 
