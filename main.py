@@ -5,7 +5,7 @@ import urllib.parse # join urls
 from bs4 import BeautifulSoup # parse html
 import sqlite3 # db api 
 from datetime import datetime # set ctl timestamps
-from prettytable import PrettyTable # print tables
+from prettytable import from_db_cursor as table_from_cursor # print tables
 
 
 class Input:
@@ -200,9 +200,11 @@ class DAOManager:
         cur.executemany(insert, data_wctl)
         self.conn.commit()
 
-    def get(self, sql: str, args: list=[]):
+    def get(self, sql: str, args: list=[], is_extracted_data=True):
         cur = self.conn.cursor()
-        data = cur.execute(sql, args).fetchall()
+        data = cur.execute(sql, args)
+        if is_extracted_data:
+            data = data.fetchall()
         return data 
 
 
@@ -250,44 +252,44 @@ class WeatherServiceAPI():
             await func2decorate(*args)
         return wrap
 
-    # async def get(self):
-    #     try:
-    #         # check if weather already exist
-    #         # scap weather if not exist
-    #         # return weather
-    #         city_ru = self._input.get_city() # REWRITE, add this to common interface
-    #         city_en = await self._translator.get_trans(city_ru)
-    #         # city_en = "moscow"
-
-    #         if not await self.__is_weather_exist__(city_en):
-    #             print("weather not exist")
-    #             city_weather = await self._weather_scraper.get(city_en)
-    #             self._db.set(city_weather)
-            
-    #         weather = self._db.get("select * from weather")
-    #         print(weather)
-    #     except Exception as error:
-    #         print(f"Error {error}")
-    #         raise error
-
     @scrape_ifnexist_decorator
     async def get_month_weather(self, city: str):
         month_w = """
-        SELECT *
+        SELECT
+            forecast_id, city, report_date, weather, temperature_day, temperature_night
         FROM weather
         WHERE city = ?
         """
-        data = self._db.get(month_w, (city,))
-        print(data)
+        data = self._db.get(month_w, (city,), is_extracted_data=False)
+        table = table_from_cursor(data)
+        print(table)
 
     @scrape_ifnexist_decorator
     async def get_avg_weather(self, city: str):
         avg_w = """
         SELECT
-            AVG(weather_id) as day
+            AVG(
+                CAST(SUBSTR(temperature_day, INSTR(temperature_day, ' ')+1, INSTR(temperature_day, '°')-(INSTR(temperature_day, ' ')+1)) as DECIMAL)
+            ) as avg_day,
+            AVG(
+                CAST(SUBSTR(temperature_night, INSTR(temperature_night, ' ')+1, INSTR(temperature_night, '°')-(INSTR(temperature_night, ' ')+1)) as DECIMAL)
+            ) as avg_night
         FROM weather
         WHERE city = ?
         """
+        data = self._db.get(avg_w, (city,), is_extracted_data=False)
+        table = table_from_cursor(data)
+        print(table)
+    
+    @scrape_ifnexist_decorator
+    async def get_available_cities(self, city: str):
+        available_w = """ 
+        SELECT DISTINCT city
+        from weather 
+        """
+        data = self._db.get(available_w, is_extracted_data=False)
+        table = table_from_cursor(data)
+        print(table)
 
     async def run(self):
         try:
@@ -301,7 +303,7 @@ class WeatherServiceAPI():
                 (1, "exit"): lambda: exit(0),
                 (2, "month_weather"): self.get_month_weather,
                 (3, "avg_weather"): self.get_avg_weather,
-                # available cities
+                (4, "available_cities"): self.get_available_cities,
             }
 
             while 1:
