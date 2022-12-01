@@ -10,7 +10,7 @@ from prettytable import from_db_cursor as table_from_cursor # print tables
 
 class Input:
     """
-    Getting input from user
+    Getting input from user.
     """
     def __init__(self, inmethod: str="stdin") -> None:
         """
@@ -24,6 +24,9 @@ class Input:
         self.inmethod = inmethod
 
     def get_city(self) -> str:
+        """
+        Select input type by specified in init.
+        """
         result = None
         if self.inmethod == self.STDIN:
             result = self.__get_stdin__()
@@ -32,6 +35,9 @@ class Input:
         return result
 
     def __get_stdin__(self) -> str:
+        """
+        Get user input from STDIN.
+        """
         result = input("City? ").lower()
         return result
 
@@ -45,12 +51,15 @@ class Input:
 
 class TranslatorAPI:
     """
-    Translator API from ru to en
+    Translator API from RU to EN.
     """
     def __init__(self) -> None:
         self.url = 'https://libretranslate.de/translate'
 
     async def get_trans(self, text: str, source: str="ru", target: str="en") -> str:
+        """
+        Request translator API to get phrase in english.
+        """
         async with ClientSession() as session:
             data = {'q': text, 'source': source, 'target': target, 'format': 'text'}
             async with session.post(self.url, json=data) as response:
@@ -83,6 +92,9 @@ class WeatherScraper:
                     raise error
     
     async def __parse__(self, soup: BeautifulSoup) -> [{}]:
+        """
+        Prase structure from HTML page.
+        """
         try:
             clean_forecast = []
             forecast = soup.find("div", class_="forecast-briefly__days")
@@ -118,6 +130,9 @@ class WeatherScraper:
         return formatted_weather
 
     async def get(self, city: str) -> [()]:
+        """
+        Request HTML page, parse, format and return.
+        """
         try:
             soup = await self.get_content(city)
             # soup = BeautifulSoup(open("doc.html"), "html.parser") # mock data
@@ -161,6 +176,9 @@ class DAOManager:
         cur.execute(create_table_query)
     
     def __get_last_ctl_load__(self, cur: sqlite3.Cursor) -> int:
+        """
+        Get last CTL load number/id.
+        """
         select_max_ctl_id = """
         SELECT 
             CASE
@@ -173,6 +191,9 @@ class DAOManager:
         return res
 
     def set(self, data: [(str, str, str, str, str)]) -> None: 
+        """
+        Save data to database.
+        """
         cur = self.conn.cursor()
         CTL_ID = self.__get_last_ctl_load__(cur)+1 # load id
         CTL_DATE = str(datetime.timestamp(datetime.now())) # get current timestamp, like 1594819641.9622827
@@ -200,7 +221,10 @@ class DAOManager:
         cur.executemany(insert, data_wctl)
         self.conn.commit()
 
-    def get(self, sql: str, args: list=[], is_extracted_data=True):
+    def get(self, sql: str, args: list=[], is_extracted_data=True) -> [[], sqlite3.Cursor]:
+        """
+        Execute request to database with custom request and parameters.
+        """
         cur = self.conn.cursor()
         data = cur.execute(sql, args)
         if is_extracted_data:
@@ -208,7 +232,7 @@ class DAOManager:
         return data 
 
 
-class WeatherServiceAPI():
+class WeatherServiceAPI:
     """
     Contain methods of this service.
     Methods:
@@ -237,6 +261,9 @@ class WeatherServiceAPI():
         return False
 
     def scrape_ifnexist_decorator(func2decorate):
+        """
+        Decorator for check if weather already exist. If not, then save some actual data to database.
+        """
         async def wrap(*args):
             # scrap here
             city_ru = args[1]
@@ -244,7 +271,7 @@ class WeatherServiceAPI():
             #city_en = await self._translator.get_trans(city_ru)
             city_en = city_ru
             if not await self.__is_weather_exist__(city_en):
-                print("weather not exist")
+                print("Weather not exist. Load some weather.")
                 city_weather = await self._weather_scraper.get(city_en)
                 self._db.set(city_weather)
             else:
@@ -253,7 +280,10 @@ class WeatherServiceAPI():
         return wrap
 
     @scrape_ifnexist_decorator
-    async def get_month_weather(self, city: str):
+    async def get_month_weather(self, city: str) -> None:
+        """
+        Select month(yeah, probably not month) of weather by city.
+        """
         month_w = """
         SELECT
             forecast_id, city, report_date, weather, temperature_day, temperature_night
@@ -265,7 +295,10 @@ class WeatherServiceAPI():
         print(table)
 
     @scrape_ifnexist_decorator
-    async def get_avg_weather(self, city: str):
+    async def get_avg_weather(self, city: str) -> None:
+        """
+        Select average temperature by day/night and city.
+        """
         avg_w = """
         SELECT
             AVG(
@@ -282,7 +315,10 @@ class WeatherServiceAPI():
         print(table)
     
     @scrape_ifnexist_decorator
-    async def get_available_cities(self, city: str):
+    async def get_available_cities(self, city: str) -> None:
+        """
+        Select cities, that saved in database.
+        """
         available_w = """ 
         SELECT DISTINCT city
         from weather 
@@ -291,7 +327,11 @@ class WeatherServiceAPI():
         table = table_from_cursor(data)
         print(table)
 
-    async def run(self):
+    async def run(self) -> None:
+        """
+        Main function of service.
+        Control menu and methods of others API. 
+        """
         try:
             def print_menu() -> None:
                 print("Select number: ")
@@ -339,7 +379,7 @@ class WeatherServiceAPI():
 
 
 async def main():
-    weather_service = WeatherServiceAPI(db="test.db")
+    weather_service = WeatherServiceAPI(db="prom-weather.db")
     await weather_service.run()
 
 if __name__ == "__main__":
