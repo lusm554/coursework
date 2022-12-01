@@ -105,7 +105,7 @@ class WeatherScraper:
             day, month = each_obj["month"].split(" ")
             report_date = datetime.strptime(f"{day}-{nmonth.index(month)+1}-{datetime.now().year}", "%d-%m-%Y") # TODO: fix problems with current year
             dobj = {
-                "city": city,
+                "city": city.lower(),
                 "report_date": str(report_date),
             }
             dobj = {**each_obj, **dobj}
@@ -192,14 +192,10 @@ class DAOManager:
         cur.executemany(insert, data_wctl)
         self.conn.commit()
 
-    def get(self, data=None):
+    def get(self, sql: str, args: list=[]):
         cur = self.conn.cursor()
-        select = """
-        SELECT *
-        FROM weather
-        """
-        data_iter = cur.execute(select)
-        return data_iter
+        data = cur.execute(sql, args).fetchall()
+        return data 
 
 class WeatherServiceAPI():
     """
@@ -211,9 +207,23 @@ class WeatherServiceAPI():
     """
     def __init__(self, db: str="test.db"):
         self._input = Input()
-        self._translator = TranslatorAPI()
+        self._translator = TranslatorAPI() # TODO: change transator to transcriptor
         self._weather_scraper = WeatherScraper()
         self._db = DAOManager(db=db)
+    
+    async def __is_weather_exist__(self, city: str) -> bool:
+        """
+        Check is weather exist and not out of date.
+        NOT THE BEST SOLUTION. SEARCH TIME DEPENDS OF COUNT OF WEATHER.
+        """
+        select = "SELECT * FROM weather where city = ?"
+        weather_by_city = self._db.get(select, (city.lower(),))
+        today = datetime.today().strftime("%Y-%m-%d") # af date format
+        weather_exist = len(weather_by_city) != 0
+        weather_not_outofdate = any((today in dweather[2]) for dweather in weather_by_city)
+        if weather_exist and weather_not_outofdate:
+            return True
+        return False
     
     async def get(self):
         try:
@@ -222,16 +232,21 @@ class WeatherServiceAPI():
             # return weather
             city_ru = self._input.get_city() # REWRITE, add this to common interface
             city_en = await self._translator.get_trans(city_ru)
-            city_weather = await self._weather_scraper.get(city_en)
-            self._db.set(city_weather)
-            for i in self._db.get():
-                print(i)
+            # city_en = "moscow"
+
+            if not await self.__is_weather_exist__(city_en):
+                print("weather not exist")
+                city_weather = await self._weather_scraper.get(city_en)
+                self._db.set(city_weather)
+            
+            weather = self._db.get("select * from weather")
+            print(weather)
         except Exception as error:
             print(f"Error {error}")
             raise error
 
 async def main():
-    weather_service = WeatherServiceAPI(db=":memory:")
+    weather_service = WeatherServiceAPI(db="test.db")
     await weather_service.get()
 
 if __name__ == "__main__":
