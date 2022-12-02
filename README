@@ -1,16 +1,2 @@
 BigData parallel processing methods and parallelism in programming based on the weather service
 
-Map of actions.
-
-Full version:
-1. Request Weather API with some city in russian
-2. Translate city in en
-3. Parse yandex weather page by https://yandex.ru/pogoda/<city>?via=hnav
-4. Send response back
-5. Save result to DB
-
-Short version:
-1. Get city in input
-2. Translate city in en
-3. Parse yandex weather page by https://yandex.ru/pogoda/<city>?via=hnav
-5. Save result to DB
